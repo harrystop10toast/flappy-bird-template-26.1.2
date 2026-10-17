@@ -1,0 +1,32 @@
+{
+	"schemaVersion": 1,
+	"id": "gamebox",
+	"version": "${version}",
+	"name": "GameBox",
+	"description": "GameBox renders 1-bit games (Flappy Bird and DOOM) directly onto the Minecraft HUD using Unicode Braille characters. DOOM is powered by a native doomgeneric bridge. Use /gamebox for the GUI, /doom for DOOM control, and /flappybird to play Flappy Bird.",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0 (mod) / GPL-2.0 (DOOM native component)",
+	"icon": "assets/gamebox/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"com.example.gamebox.GameBoxClient"
+		]
+	},
+	"mixins": [
+		"gamebox.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.1.2",
+		"java": ">=25",
+		"fabric-api": "*",
+		"increased-chat-height": "*"
+	}
+}

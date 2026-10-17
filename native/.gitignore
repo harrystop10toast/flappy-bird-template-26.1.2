@@ -1,0 +1,8 @@
+# doomgeneric is fetched on demand by build.sh (GPL-2.0 — do not vendor here)
+doomgeneric/
+# Native build output
+build/
+*.o
+*.so
+*.dylib
+*.dll

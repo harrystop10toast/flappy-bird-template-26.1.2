@@ -1,0 +1,37 @@
+GameBox optional mouse-look patch for doomgeneric
+=================================================
+
+Stock doomgeneric does not read the mouse. The GameBox native bridge
+(doomgeneric_gamebox.c) exports `DG_GetMouse(int*dx,int*dy,int*buttons)` and the
+Java side pushes relative motion with `gamebox_doom_push_mouse(...)`. To make
+DOOM actually turn/fire from the mouse, wire that hook into the engine's
+per-tic command builder.
+
+Apply conceptually to doomgeneric/doomgeneric/g_game.c, inside G_BuildTiccmd():
+
+    extern int DG_GetMouse(int* dx, int* dy, int* buttons);   // add near top
+
+    // ... inside G_BuildTiccmd(), after the keyboard/joystick section:
+    {
+        int mdx = 0, mdy = 0, mbtn = 0;
+        if (DG_GetMouse(&mdx, &mdy, &mbtn))
+        {
+            // Horizontal mouse -> turn (same scaling DOOM uses for mouse).
+            cmd->angleturn -= (mdx * 0x8) & 0xFFFF;
+
+            // Buttons: bit0 = fire, bit1 = use.
+            if (mbtn & 1) cmd->buttons |= BT_ATTACK;
+            if (mbtn & 2) cmd->buttons |= BT_USE;
+
+            // (mdy is available for mouselook / forward if desired.)
+        }
+    }
+
+Build order:
+  1. ./build.sh clones doomgeneric into native/doomgeneric.
+  2. Apply the edit above to native/doomgeneric/doomgeneric/g_game.c.
+  3. Re-run `make DOOMGENERIC_DIR=doomgeneric/doomgeneric install-mod`.
+
+Without this patch, GameBox DOOM is fully playable with the keyboard
+(WASD move/strafe, arrows, Ctrl = fire, Space = use, Enter/Esc for menus); the
+mouse deltas are simply ignored by the engine.
