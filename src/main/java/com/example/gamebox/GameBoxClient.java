@@ -24,17 +24,25 @@ import org.slf4j.LoggerFactory;
 /**
  * GameBox client entry point.
  *
- * <p>Renders 1-bit games into the Minecraft chat box using Unicode Braille. There
- * is a <b>single command</b>, {@code /game}, which does everything:
+ * <p>Renders 1-bit games into the Minecraft chat box using Unicode Braille.
  *
+ * <p>Games live under <b>{@code /game}</b>:
  * <ul>
- *   <li>{@code /game} / {@code /game list} — list imported games + usage;</li>
- *   <li>{@code /game <filename>} — launch a game by file name (engine
- *       auto-detected from the extension);</li>
+ *   <li>{@code /game} / {@code /game list} — list built-in + imported games + usage;</li>
+ *   <li>{@code /game mario} — the built-in Super Mario Bros. (NES);</li>
  *   <li>{@code /game flappy} — the built-in Flappy Bird;</li>
- *   <li>{@code /game graph …} / {@code /game trig …} — the calculators;</li>
- *   <li>{@code /game size <px>} — set the emulator canvas width;</li>
- *   <li>{@code /game stop} — stop the running game/tool.</li>
+ *   <li>{@code /game minecraft} — launch a second real Minecraft into chat;</li>
+ *   <li>{@code /game <filename>} — launch an imported ROM/WAD by file name
+ *       (engine auto-detected from the extension);</li>
+ *   <li>{@code /game size <px>} — set the game canvas width;</li>
+ *   <li>{@code /game stop} — stop the running game.</li>
+ * </ul>
+ *
+ * <p>Non-gaming tools are their own top-level commands:
+ * <ul>
+ *   <li>{@code /graph …} (alias {@code /graphing}) — the graphing calculator;</li>
+ *   <li>{@code /trig …} (alias {@code /trigonometry}) — the trig calculator /
+ *       triangle visualizer.</li>
  * </ul>
  *
  * <p>The flap key and the shared grab-keyboard key are registered into the
@@ -141,9 +149,7 @@ public final class GameBoxClient implements ClientModInitializer {
             CommandDispatcher<FabricClientCommandSource> dispatcher,
             CommandBuildContext ctx) {
 
-        // /game — the single, universal command. Everything is a subcommand of it
-        // (see GameDispatcher): launch a ROM/WAD by name, flappy, graph, trig,
-        // size, stop, list.
+        // /game — launch games (built-in or imported). See GameDispatcher.
         dispatcher.register(
                 ClientCommands.literal("game")
                         .then(ClientCommands.argument("args", StringArgumentType.greedyString())
@@ -156,6 +162,41 @@ public final class GameBoxClient implements ClientModInitializer {
                                 }))
                         .executes(c -> {
                             for (String line : games.handle("")) {
+                                c.getSource().sendFeedback(Component.literal(line));
+                            }
+                            return 1;
+                        }));
+
+        // /graph (alias /graphing) — the graphing calculator (a tool, not a game).
+        registerTool(dispatcher, "graph", games::handleGraph);
+        registerTool(dispatcher, "graphing", games::handleGraph);
+
+        // /trig (alias /trigonometry) — the trig calculator / triangle visualizer.
+        registerTool(dispatcher, "trig", games::handleTrig);
+        registerTool(dispatcher, "trigonometry", games::handleTrig);
+    }
+
+    /**
+     * Registers a top-level tool command {@code /name [args]} that forwards its
+     * (optional) greedy argument string to {@code handler} and prints each
+     * returned line as chat feedback.
+     */
+    private static void registerTool(
+            CommandDispatcher<FabricClientCommandSource> dispatcher,
+            String name,
+            java.util.function.Function<String, java.util.List<String>> handler) {
+        dispatcher.register(
+                ClientCommands.literal(name)
+                        .then(ClientCommands.argument("args", StringArgumentType.greedyString())
+                                .executes(c -> {
+                                    String args = StringArgumentType.getString(c, "args");
+                                    for (String line : handler.apply(args)) {
+                                        c.getSource().sendFeedback(Component.literal(line));
+                                    }
+                                    return 1;
+                                }))
+                        .executes(c -> {
+                            for (String line : handler.apply("")) {
                                 c.getSource().sendFeedback(Component.literal(line));
                             }
                             return 1;

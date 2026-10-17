@@ -17,7 +17,7 @@ import org.lwjgl.glfw.GLFW;
  * (rendered into the chat box by {@link NesEngine}) and the world stay fully
  * visible. Pressing <b>ESC</b> closes the overlay (releasing input) without
  * stopping the game; re-grab with the shared focus key (<b>K</b>) or
- * {@code /supermario run}.
+ * {@code /game mario}.
  */
 public final class NesInputScreen extends Screen {
 

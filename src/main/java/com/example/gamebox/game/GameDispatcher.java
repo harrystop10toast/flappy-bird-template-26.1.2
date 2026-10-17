@@ -12,22 +12,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The brain behind the unified {@code /game} command — the single entry point for
- * everything GameBox does. It presents each game console as an importable
- * emulator file and launches it by filename, and folds the former standalone
- * commands ({@code /graphing}, {@code /trig}, {@code /setsize}, …) in as
- * subcommands so {@code /game} is the only command the player needs.
+ * The brain behind the {@code /game} command — GameBox's entry point for playing
+ * <em>games</em>. It launches the built-in games by keyword and any imported
+ * ROM/WAD by filename, all rendered in the Minecraft chat box as Braille.
+ *
+ * <p>Non-gaming tools are <strong>not</strong> handled here: the graphing
+ * calculator and the trigonometry calculator live under their own top-level
+ * commands ({@code /graph} and {@code /trig}).
  *
  * <ul>
- *   <li>{@code /game} — list the games found on disk (plus built-ins) and usage;</li>
+ *   <li>{@code /game} — list the built-in games and any imported ROM/WAD, + usage;</li>
+ *   <li>{@code /game mario} — the built-in Super Mario Bros. (NES);</li>
+ *   <li>{@code /game flappy} — the built-in Flappy Bird;</li>
+ *   <li>{@code /game minecraft} — launch a second real Minecraft into chat;</li>
  *   <li>{@code /game <filename>} — detect the engine from the file extension
  *       ({@code .nes} → NES, {@code .wad} → DOOM), widen the chat canvas, and
  *       launch it;</li>
- *   <li>{@code /game flappy} — the built-in Flappy Bird;</li>
- *   <li>{@code /game graph …} — the graphing calculator;</li>
- *   <li>{@code /game trig …} — the trigonometry calculator / visualizer;</li>
- *   <li>{@code /game size <px>} — set the emulator chat-canvas width;</li>
- *   <li>{@code /game stop} — stop whatever game/tool is currently running.</li>
+ *   <li>{@code /game size <px>} — set the game chat-canvas width;</li>
+ *   <li>{@code /game stop} — stop whatever game is currently running.</li>
  * </ul>
  */
 public final class GameDispatcher {
@@ -68,35 +70,43 @@ public final class GameDispatcher {
             return one("§aFlappy Bird §7started. §eSpace/W/↑/click§7 to flap; "
                     + "§eK§7 regrab · §eEsc§7 release · §e/game stop§7 to end.");
         }
+        if (lower.equals("mario") || lower.equals("supermario") || lower.equals("super-mario")
+                || lower.equals("smb") || lower.equals("super mario") || lower.equals("super mario bros")
+                || lower.equals("supermariobros")) {
+            // Super Mario Bros. is a built-in game: launch the bundled ROM
+            // directly, no import required.
+            widenCanvas();
+            return one("§a" + nes.run());
+        }
         if (lower.equals("minecraft") || lower.equals("mc")
                 || lower.equals("minecraft2") || lower.equals("mc2")) {
             widenCanvas();
             return one("§a" + child.start());
         }
 
-        // Fold the former standalone tools in as subcommands.
+        // The game chat-canvas width lever (applies to every game GameBox runs).
         String[] head = splitHead(args);
         String cmd = head[0].toLowerCase(java.util.Locale.ROOT);
-        String rest = head[1];
         switch (cmd) {
-            case "graph":
-            case "graphing":
-                return handleGraphing(rest);
-            case "trig":
-            case "trigonometry":
-                return trig.handle(rest);
             case "size":
             case "setsize":
             case "width":
-                return one(setSize(rest));
+                return one(setSize(head[1]));
             default:
+                // Anything else is treated as an imported ROM/WAD filename.
                 return one(launch(args));
         }
     }
 
-    // ─── Graphing subcommand (folds in the former /graphing) ──────────────────
+    // ─── Graphing handler (used by the top-level /graph command) ──────────────
 
-    private List<String> handleGraphing(String rest) {
+    /**
+     * Handles the argument string for the standalone {@code /graph} command. Kept
+     * here so the one place that touches the {@link GraphingController} is beside
+     * the rest of GameBox's command glue; {@code GameBoxClient} routes
+     * {@code /graph} straight to this.
+     */
+    public List<String> handleGraph(String rest) {
         String trimmed = rest == null ? "" : rest.trim();
         if (trimmed.isEmpty()) {
             // Bare: toggle on/off (or resume if paused), then list equations.
@@ -124,7 +134,18 @@ public final class GameDispatcher {
         return one(graphing.addEquation(trimmed));
     }
 
-    // ─── Size subcommand (folds in the former /setsize) ───────────────────────
+    // ─── Trig handler (used by the top-level /trig command) ───────────────────
+
+    /**
+     * Handles the argument string for the standalone {@code /trig} command,
+     * delegating to the {@link TrigController}. Routed here from
+     * {@code GameBoxClient} so all of GameBox's command glue stays in one place.
+     */
+    public List<String> handleTrig(String rest) {
+        return trig.handle(rest);
+    }
+
+    // ─── Size subcommand (the game chat-canvas width lever) ───────────────────
 
     private String setSize(String rest) {
         String s = rest == null ? "" : rest.trim();
@@ -205,13 +226,17 @@ public final class GameDispatcher {
 
     // ─── Listing / help ────────────────────────────────────────────────────────
 
-    /** A multi-line listing of discovered games plus the built-in keyword. */
+    /** A multi-line listing of built-in games plus any imported ROM/WAD. */
     public List<String> listing() {
         List<String> out = new ArrayList<>();
-        out.add("§b§l── /game — launch any imported game ──");
+        out.add("§b§l── /game — play a game ──");
+        out.add("§7Built-in games (always available):");
+        out.add("  §a▶ §emario §8[Super Mario Bros. · NES]");
+        out.add("  §a▶ §eflappy §8[Flappy Bird]");
+        out.add("  §a▶ §eminecraft §8[a second real Minecraft, in chat]");
         List<GameLibrary.GameFile> games = GameLibrary.discover();
         if (games.isEmpty()) {
-            out.add("§7No imported games yet. Drop a §fNES §8(.nes)§7 or §fDOOM §8(.wad)§7 "
+            out.add("§7Imported games: §8none yet — drop a §fNES §8(.nes)§7 or §fDOOM §8(.wad)§7 "
                     + "file into:");
             out.add("§8  " + GameLibrary.gamesDir());
         } else {
@@ -221,28 +246,28 @@ public final class GameDispatcher {
                         g.system().displayName(), humanSize(g.sizeBytes())));
             }
         }
-        out.add("§7Built-in: §eflappy§7, §eminecraft§7, §egraph§7, §etrig §8(always available)");
-        out.add("§8usage: §7/game <name> §8· §7flappy §8· §7graph §8· §7trig §8· §7size <px> §8· §7stop");
+        out.add("§8usage: §7/game <name> §8· §7mario §8· §7flappy §8· §7minecraft §8· §7size <px> §8· §7stop");
+        out.add("§8tools (separate commands): §7/graph §8· §7/trig");
         return out;
     }
 
     private List<String> help() {
         List<String> out = new ArrayList<>();
-        out.add("§b§l── /game — the one command for everything ──");
-        out.add("§e/game§7                list imported games + usage");
-        out.add("§e/game <filename>§7     launch a game by file name, e.g. §fsuper-mario.nes§7, §fdoom1.wad");
-        out.add("§8                       engine auto-detected: §f.nes§8→NES, §f.wad§8→DOOM");
-        out.add("§e/game flappy§7         built-in Flappy Bird (K focus · Esc release)");
+        out.add("§b§l── /game — play a game ──");
+        out.add("§e/game§7                list built-in + imported games + usage");
+        out.add("§e/game mario§7          built-in Super Mario Bros. (K focus · Esc release)");
+        out.add("§e/game flappy§7         built-in Flappy Bird (Space flap · K focus · Esc release)");
         out.add("§e/game minecraft§7      launch a second REAL Minecraft (hidden child) into chat");
-        out.add("§e/game graph [eqn]§7    graphing calculator (e.g. §f/game graph sin(x)§7)");
-        out.add("§e/game trig [args]§7    trig calculator / triangle visualizer (§f/game trig help§7)");
+        out.add("§e/game <filename>§7     launch an imported game by file name, e.g. §fdoom1.wad§7, §fmygame.nes");
+        out.add("§8                       engine auto-detected: §f.nes§8→NES, §f.wad§8→DOOM");
         out.add("§e/game size <px>§7      set the game canvas width (" + GameBoxConfig.MIN_PX_W
                 + ".." + GameBoxConfig.MAX_PX_W + ")");
-        out.add("§e/game stop§7           stop the running game/tool");
+        out.add("§e/game stop§7           stop the running game");
         out.add("§7Playable in chat: §fNES §8(.nes)§7 and §fDOOM §8(.wad)§7 — "
                 + "all games render as Braille in the chat box.");
         out.add("§7Import a game by dropping its file into §f" + GameLibrary.gamesDir());
         out.add("§7(the game dir, its parent, and §fconfig/gamebox/§7 are also scanned).");
+        out.add("§7Non-game tools live under their own commands: §e/graph§7 and §e/trig§7.");
         return out;
     }
 

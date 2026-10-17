@@ -9,9 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * High-level control surface for Super Mario Bros., shared by the
- * {@code /supermario} command. Owns the single {@link NesEngine}, resolves the
- * NES ROM, and pushes the input overlay when the game starts.
+ * High-level control surface for Super Mario Bros., GameBox's <strong>built-in</strong>
+ * NES game. Launched by {@code /game mario}, it owns the single {@link NesEngine},
+ * resolves the bundled NES ROM, and pushes the input overlay when the game starts.
  *
  * <p>Unlike DOOM (a native engine that cannot be re-initialised), the NES console
  * is pure Java, so a fresh engine + cartridge can be created on each run —
@@ -20,9 +20,9 @@ import java.nio.file.Path;
  * <h2>ROM resolution order</h2>
  * <ol>
  *   <li>the {@code gamebox.nes.rom} system property (absolute path);</li>
- *   <li>the game directory and its parent — the brief places the ROM
- *       "directly under the main folder": in dev the game dir is {@code run/},
- *       so its parent is the project root where the ROM lives;</li>
+ *   <li>the game directory and its parent — the bundled ROM ships "directly
+ *       under the main folder": in dev the game dir is {@code run/}, so its
+ *       parent is the project root where the ROM lives;</li>
  *   <li>{@code <game dir>/config/gamebox/}.</li>
  * </ol>
  */
@@ -133,8 +133,8 @@ public final class NesController {
                 mc.gui.getChat().addClientSystemMessage(
                         net.minecraft.network.chat.Component.literal(
                                 "§c[GameBox] §7Super Mario Bros. paused — chat is yours. "
-                                        + "§e/supermario run §7to continue, "
-                                        + "§e/supermario restart §7for a fresh game."));
+                                        + "§e/game mario §7to continue, "
+                                        + "§e/game stop §7when you're done."));
             });
         }
         return "Super Mario Bros. paused.";

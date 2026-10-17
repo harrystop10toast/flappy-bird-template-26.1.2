@@ -5,11 +5,16 @@ onto the in-game HUD using **Unicode Braille** characters (U+2800–U+28FF). Eac
 Braille glyph packs a 2×4 block of pixels, giving a surprisingly high-resolution
 mono display inside a tiny area of the screen.
 
-Ships with two games:
+Ships with three built-in games (no import needed):
 
-- **Flappy Bird** — pure Java, always available.
+- **Super Mario Bros.** — a pure-Java NES emulator (6502 CPU + 2C02 PPU), played
+  with `/game mario`.
+- **Flappy Bird** — pure Java, always available (`/game flappy`).
 - **DOOM** — powered by the native [`doomgeneric`](https://github.com/ozkl/doomgeneric)
   engine via JNA. Requires building a small native bridge and supplying a WAD.
+
+You can also drop your own `.nes` ROMs or `.wad` files into `config/gamebox/games/`
+and launch them by name with `/game <filename>`.
 
 ---
 
@@ -25,9 +30,10 @@ Ships with two games:
     a score header = 10 chat lines), exactly like the original template.
   - **DOOM** draws onto the **HUD** via Fabric's HUD element API (see the note
     below), over the world rather than in chat.
-- **`/gamebox` GUI** to launch games and **rebind keys**.
-- **`/doom play|pause|resume|stop|status`** control.
-- **`/flappybird`** toggle (kept from the original template).
+- **`/game`** command: launch the built-in games (`mario`, `flappy`, `minecraft`)
+  or any imported `.nes`/`.wad` by name, set the canvas size, and stop.
+- **`/graph`** and **`/trig`** commands: the (non-game) graphing and trigonometry
+  calculators, each rendered in chat as Braille.
 - DOOM input: a transparent full-screen overlay captures the keyboard/mouse,
   grabs the cursor, and maps GLFW keys to DOOM key codes.
 
@@ -150,42 +156,43 @@ Do **not** use a commercial WAD you are not licensed to redistribute.
 
 ### Commands
 
-**The unified `/game` command** is the easy way to launch anything — GameBox
-treats each console/engine as an emulator keyed by file extension, so you import
-a game simply by dropping its file into `config/gamebox/games/` and launching it
-by name.
+**The `/game` command** launches games — the built-in ones by keyword and any
+imported ROM/WAD by filename. GameBox treats each console/engine as an emulator
+keyed by file extension, so you import a game simply by dropping its file into
+`config/gamebox/games/` and launching it by name.
 
 | Command | Effect |
 |---|---|
-| `/game` | List imported games (and the built-in `flappy`) + usage |
-| `/game <filename>` | Launch a game by file name — engine auto-detected: `.nes`→NES, `.wad`→DOOM. E.g. `/game super-mario.nes`, `/game doom1.wad` (the extension is optional and matching is case/`-`/`_`-insensitive, so `/game supermario` works too) |
+| `/game` | List built-in games + any imported ROM/WAD + usage |
+| `/game mario` | Start the built-in **Super Mario Bros.** (NES) — no import needed (aliases: `supermario`, `smb`) |
 | `/game flappy` | Start the built-in Flappy Bird |
+| `/game minecraft` | Launch a second real Minecraft (hidden child) into chat |
+| `/game <filename>` | Launch an imported game by file name — engine auto-detected: `.nes`→NES, `.wad`→DOOM. E.g. `/game doom1.wad`, `/game mygame.nes` (the extension is optional and matching is case/`-`/`_`-insensitive) |
+| `/game size <px>` | Set the game canvas width (48..448 px; height follows the 448:280 ratio) |
 | `/game stop` | Stop whichever game is running |
 
-Launching an emulator game through `/game` also widens the chat canvas to its
-maximum so the picture is as large as chat allows. Games are discovered in
+Launching a game through `/game` also widens the chat canvas to its maximum so
+the picture is as large as chat allows. Imported games are discovered in
 `config/gamebox/games/` (the recommended drop-in folder, created on first use),
 `config/gamebox/`, the game directory, and its parent.
 
 **In-chat only.** Every game GameBox runs renders **inside the Minecraft chat
 box** as Braille. It ships two engines: the pure-Java **NES** emulator (`.nes`,
-`.fc`) and the native **DOOM** engine (`.wad`, `.pwad`). Those are the extensions
-`/game` recognises; a file of any other type is simply reported as not a GameBox
+`.fc`) — which powers the built-in Super Mario Bros. — and the native **DOOM**
+engine (`.wad`, `.pwad`). Those are the extensions `/game` recognises for
+imported files; a file of any other type is simply reported as not a GameBox
 game. (GameBox deliberately does **not** shell out to external standalone
 emulators — a game playing in its own window outside Minecraft defeats the point.)
 Adding a new system later means writing an in-chat engine and pointing its
-extension at it in `GameLibrary` — the `/game` command is the single, stable entry
-point for that future work.
+extension at it in `GameLibrary`.
 
-`/game` is the **only** command; everything else is a subcommand of it:
+**Non-game tools are separate commands.** The calculators are *not* games, so
+they live under their own top-level commands rather than under `/game`:
 
 | Command | Effect |
 |---|---|
-| `/game flappy` | Start the built-in Flappy Bird (K focus · Esc release) |
-| `/game graph [equation]` | Toggle/drive the graphing calculator (e.g. `/game graph sin(x)`, `/game graph restart`, `/game graph all`) |
-| `/game trig [args]` | Trig calculator / triangle visualizer (`/game trig help` for the full syntax) |
-| `/game size <px>` | Set the game canvas width (48..448 px; height follows the 448:280 ratio) |
-| `/game stop` | Stop whichever game/tool is running |
+| `/graph [equation]` | Toggle/drive the graphing calculator (e.g. `/graph sin(x)`, `/graph restart`, `/graph all`). Alias: `/graphing` |
+| `/trig [args]` | Trig calculator / triangle visualizer (`/trig help` for the full syntax). Alias: `/trigonometry` |
 
 ### Default keybinds (rebindable in the vanilla Controls menu)
 
@@ -239,9 +246,9 @@ project root, where `Super Mario Bros. (Europe) (Rev A).nes` lives), from
 Only free/legally-obtained ROMs should be used.
 
 Press Minecraft's **Esc** while in the DOOM overlay to release input without
-stopping the game; re-grab it with the DOOM focus key (`K`) or `/doom resume`.
+stopping the game; re-grab it with the DOOM focus key (`K`).
 
-### Graphing calculator (`/graphing`)
+### Graphing calculator (`/graph`)
 
 A 2D function grapher that plots `y = f(x)` equations in color into the chat box
 using the same Braille technique as DOOM and Super Mario. The view has labeled
@@ -249,11 +256,11 @@ axes — numeric tick labels along x and y (a tiny 3×5 bitmap font), an origin 
 and `x`/`y` axis caps — plus a big, readable **scale bar** on the bottom line
 (normal font, e.g. `|-----2-----|  = 2 units`) that tracks the current zoom, since
 the in-canvas Braille tick labels are necessarily tiny. Toggle it with
-`/graphing`; it keeps your equations across on/off toggles (only
-`/graphing restart` clears them). Each equation gets a numeric id and a distinct
-curve color; `/graphing` (bare) and `/graphing all` print the id/equation/color
-list — `/graphing all` first **pauses** the live graph so the list is not
-instantly buried by the next frame (press `K` or `/graphing` to resume).
+`/graph` (alias `/graphing`); it keeps your equations across on/off toggles (only
+`/graph restart` clears them). Each equation gets a numeric id and a distinct
+curve color; `/graph` (bare) and `/graph all` print the id/equation/color
+list — `/graph all` first **pauses** the live graph so the list is not
+instantly buried by the next frame (press `K` or `/graph` to resume).
 
 Expressions support `+ - * / ^`, the modulo operator (`a mod b` or `a % b`),
 parentheses, unary minus, the variables `x` and `y`, the constants `pi` and `e`,
@@ -280,16 +287,16 @@ x^2 + y^2 = 9        (a circle)
 x^2 - y^2 = 1        (a hyperbola)
 ```
 
-A bare expression with no `=` is treated as `y = …` (e.g. `/graphing 0.5*x^2 - 3`).
+A bare expression with no `=` is treated as `y = …` (e.g. `/graph 0.5*x^2 - 3`).
 
 **Constraints** restrict where a curve draws: append one or more `{…}` blocks with
 a comparison (chained inequalities like `a <= x <= b` are allowed), or use the
 Desmos-style domain form `{body : condition}`. Examples:
 
 ```
-/graphing y = sin(x) {y<0}          only the parts dipping below the x-axis
-/graphing x^2+y^2=9 {x>0}{y>0}      the circle's first-quadrant arc only
-/graphing {x^2 : -1<=x<=1}          a parabola drawn only on -1 ≤ x ≤ 1
+/graph y = sin(x) {y<0}          only the parts dipping below the x-axis
+/graph x^2+y^2=9 {x>0}{y>0}      the circle's first-quadrant arc only
+/graph {x^2 : -1<=x<=1}          a parabola drawn only on -1 ≤ x ≤ 1
 ```
 
 While focused (press **K** to grab, **Esc** to release), the view is driven like a

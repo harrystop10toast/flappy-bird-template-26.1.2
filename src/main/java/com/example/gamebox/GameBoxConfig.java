@@ -10,8 +10,8 @@ import java.nio.file.Path;
 import java.util.Properties;
 
 /**
- * Persisted GameBox settings: the DOOM chat canvas size, set by <b>width in
- * pixels</b> via {@code /setsize <width>}. The height follows a fixed
+ * Persisted GameBox settings: the game chat canvas size, set by <b>width in
+ * pixels</b> via {@code /game size <width>}. The height follows a fixed
  * <b>448:280</b> (16:10) pixel ratio, so {@code height = round(width * 280/448)}.
  *
  * <p>Width range is {@value #MIN_PX_W}..{@value #MAX_PX_W} px; {@value #MAX_PX_W}

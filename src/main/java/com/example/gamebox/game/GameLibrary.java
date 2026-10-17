@@ -25,8 +25,8 @@ import java.util.stream.Stream;
  *       (created on first use);</li>
  *   <li>{@code <config>/gamebox/};</li>
  *   <li>the Minecraft game directory ({@code run/} in dev);</li>
- *   <li>its parent (the project root in dev, where the bundled Super Mario ROM
- *       lives).</li>
+ *   <li>its parent (the project root in dev, where the built-in Super Mario ROM
+ *       ships).</li>
  * </ol>
  *
  * <h2>Recognised extensions → engine</h2>
