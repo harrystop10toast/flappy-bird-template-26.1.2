@@ -4,8 +4,10 @@ import com.example.gamebox.child.ChildClientController;
 import com.example.gamebox.child.ChildInputScreen;
 import com.example.gamebox.doom.DoomController;
 import com.example.gamebox.game.GameDispatcher;
+import com.example.gamebox.gb.GbController;
 import com.example.gamebox.graphing.GraphingController;
 import com.example.gamebox.nes.NesController;
+import com.example.gamebox.snes.SnesController;
 import com.example.gamebox.trig.TrigController;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -56,6 +58,8 @@ public final class GameBoxClient implements ClientModInitializer {
     private FlappyBirdGame flappy;
     private final DoomController doom = new DoomController();
     private final NesController mario = new NesController();
+    private final GbController gb = new GbController();
+    private final SnesController snes = new SnesController();
     private final GraphingController graphing = new GraphingController();
     private final TrigController trig = new TrigController();
     private final ChildClientController childHost = new ChildClientController();
@@ -72,7 +76,7 @@ public final class GameBoxClient implements ClientModInitializer {
         GameBoxKeybinds.register();
 
         flappy = new FlappyBirdGame(() -> GameBoxKeybinds.FLAP.getTranslatedKeyMessage().getString());
-        games = new GameDispatcher(doom, mario, flappy, graphing, trig, childHost);
+        games = new GameDispatcher(doom, mario, gb, snes, flappy, graphing, trig, childHost);
 
         // If this process is the hidden child client, start the frame/input bridge
         // back to the host. (Child frame capture is driven on the render thread by
@@ -88,6 +92,8 @@ public final class GameBoxClient implements ClientModInitializer {
     private void onClientTick(Minecraft client) {
         boolean doomActive = doom.isActive();
         boolean marioActive = mario.isActive();
+        boolean gbActive = gb.isActive();
+        boolean snesActive = snes.isActive();
         boolean graphingOn = graphing.isOn();
         boolean trigOn = trig.isOn();
         boolean flappyActive = flappy.isActive();
@@ -106,6 +112,10 @@ public final class GameBoxClient implements ClientModInitializer {
                 graphing.focus();
             } else if (marioActive) {
                 mario.focus();
+            } else if (gbActive) {
+                gb.focus();
+            } else if (snesActive) {
+                snes.focus();
             } else if (doomActive) {
                 doom.focus();
             } else if (flappyActive) {
@@ -118,7 +128,7 @@ public final class GameBoxClient implements ClientModInitializer {
         // open) and no other chat-owning feature is running.
         boolean flapDown = GameBoxKeybinds.FLAP.isDown();
         if (flapDown && !prevFlapDown && client.screen == null
-                && !doomActive && !marioActive && !graphingOn && !trigOn && !childOn) {
+                && !doomActive && !marioActive && !gbActive && !snesActive && !graphingOn && !trigOn && !childOn) {
             flappy.onFlapPressed();
         }
         prevFlapDown = flapDown;
@@ -134,13 +144,17 @@ public final class GameBoxClient implements ClientModInitializer {
             graphing.renderToChat();
         } else if (marioActive) {
             mario.renderToChat();
+        } else if (gbActive) {
+            gb.renderToChat();
+        } else if (snesActive) {
+            snes.renderToChat();
         } else if (doomActive) {
             doom.renderToChat();
         } else {
             flappy.tick();
         }
 
-        chatOverride.sync(doom.ownsChat() || mario.ownsChat()
+        chatOverride.sync(doom.ownsChat() || mario.ownsChat() || gb.ownsChat() || snes.ownsChat()
                 || graphing.ownsChat() || trig.ownsChat()
                 || childHost.ownsChat());
     }

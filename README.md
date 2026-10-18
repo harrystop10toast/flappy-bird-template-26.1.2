@@ -13,8 +13,11 @@ Ships with three built-in games (no import needed):
 - **DOOM** — powered by the native [`doomgeneric`](https://github.com/ozkl/doomgeneric)
   engine via JNA. Requires building a small native bridge and supplying a WAD.
 
-You can also drop your own `.nes` ROMs or `.wad` files into `config/gamebox/games/`
-and launch them by name with `/game <filename>`.
+You can also drop your own ROMs into `config/gamebox/games/` and open them by
+name with `/game open <filename>`. GameBox recognises **NES/Famicom** (`.nes`,
+`.fc`, `.famicom`) and **Game Boy** (`.gb`, `.gbc`) — both pure-Java and playable
+out of the box — plus **SNES/Super Famicom** (`.snes`, `.sfc`), which plays via a
+native snes9x libretro core once you build the small native bridge (below).
 
 ---
 
@@ -30,8 +33,9 @@ and launch them by name with `/game <filename>`.
     a score header = 10 chat lines), exactly like the original template.
   - **DOOM** draws onto the **HUD** via Fabric's HUD element API (see the note
     below), over the world rather than in chat.
-- **`/game`** command: launch the built-in games (`mario`, `flappy`, `minecraft`)
-  or any imported `.nes`/`.wad` by name, set the canvas size, and stop.
+- **`/game`** command: launch the built-in games (`mario`, `flappy`, `doom`,
+  `minecraft`) or open an imported ROM with `/game open <name>`, set the canvas
+  size, and stop.
 - **`/graph`** and **`/trig`** commands: the (non-game) graphing and trigonometry
   calculators, each rendered in chat as Braille.
 - DOOM input: a transparent full-screen overlay captures the keyboard/mouse,
@@ -133,6 +137,60 @@ by default. To enable mouse-look/turn, apply the small engine patch described in
 
 ---
 
+## Building the native SNES bridge
+
+SNES/Super Famicom ROMs (`.sfc`, `.snes`) play through the **snes9x libretro**
+core, driven by a thin C bridge (`native/snes9x_gamebox.c`) and a Java/JNA
+binding (`snes/SnesNative`) — the same architecture as DOOM. The bridge is a tiny
+libretro *frontend*: it loads the snes9x core at runtime and converts its video
+output to a fixed **256×224** ARGB framebuffer, which GameBox dithers to Braille
+in chat. It exposes `gamebox_snes_init`, `gamebox_snes_tick`,
+`gamebox_snes_framebuffer`, `gamebox_snes_push_button`, `gamebox_snes_reset`,
+`gamebox_snes_ticks_ms`, `gamebox_snes_shutdown`, and `gamebox_snes_set_core_path`.
+
+### One-shot build
+
+```bash
+cd native
+./build-snes.sh              # builds the bridge, fetches + builds the snes9x core, installs both
+# or:
+./build-snes.sh --bridge-only   # build only the bridge; supply your own snes9x core
+./build-snes.sh --no-install    # build but leave artifacts in native/build
+```
+
+This produces, per platform:
+
+| OS       | Bridge library           | snes9x core (loaded at runtime) |
+|----------|--------------------------|---------------------------------|
+| Linux    | `libgameboxsnes.so`      | `snes9x_libretro.so`            |
+| macOS    | `libgameboxsnes.dylib`   | `snes9x_libretro.dylib`         |
+| Windows  | `gameboxsnes.dll`        | `snes9x_libretro.dll`           |
+
+Requirements: a C toolchain (`clang`/`gcc`), `make`, and `git` (to fetch snes9x).
+
+### How the mod finds the native bits
+
+Resolution order:
+
+1. **Bridge:** `-Dgamebox.snes.lib=/abs/path/to/libgameboxsnes.ext`, else a bundled
+   copy at `/natives/<os>/<libname>`, else the library search path (name
+   `gameboxsnes`).
+2. **Core:** `-Dgamebox.snes.core=/abs/path/to/snes9x_libretro.ext`, else a bundled
+   `/natives/<os>/snes9x_libretro.ext`, else the environment variable
+   `GAMEBOX_SNES_CORE`, else the default core name on the library path.
+
+If the bridge or core isn't present, opening an `.sfc`/`.snes` ROM reports that
+the native library isn't available (with the build command) — it does **not**
+crash the client.
+
+> **Licensing:** snes9x is distributed under its own **non-commercial** license;
+> the libretro glue is GPL-style. Treat the built SNES artifacts with the same
+> posture as the DOOM component — `build-snes.sh` installs into the jar only if
+> you ask it to, and you should run only ROMs you are legally entitled to use.
+> Audio is not routed (GameBox is a visual, in-chat port).
+
+---
+
 ## Getting a WAD
 
 DOOM needs an IWAD. Use a **free, non-commercial** one:
@@ -157,34 +215,50 @@ Do **not** use a commercial WAD you are not licensed to redistribute.
 ### Commands
 
 **The `/game` command** launches games — the built-in ones by keyword and any
-imported ROM/WAD by filename. GameBox treats each console/engine as an emulator
-keyed by file extension, so you import a game simply by dropping its file into
-`config/gamebox/games/` and launching it by name.
+imported ROM by filename. GameBox keys each console to a file extension, so you
+import a game by dropping its ROM into the import folder
+(`config/gamebox/games/`) and opening it by name with `/game open <filename>`.
 
 | Command | Effect |
 |---|---|
-| `/game` | List built-in games + any imported ROM/WAD + usage |
+| `/game` | List built-in games + any imported ROM + usage |
 | `/game mario` | Start the built-in **Super Mario Bros.** (NES) — no import needed (aliases: `supermario`, `smb`) |
 | `/game flappy` | Start the built-in Flappy Bird |
+| `/game doom` | Start the built-in DOOM (needs a WAD in `config/gamebox/`) |
 | `/game minecraft` | Launch a second real Minecraft (hidden child) into chat |
-| `/game <filename>` | Launch an imported game by file name — engine auto-detected: `.nes`→NES, `.wad`→DOOM. E.g. `/game doom1.wad`, `/game mygame.nes` (the extension is optional and matching is case/`-`/`_`-insensitive) |
+| `/game open <filename>` | Open an imported ROM by file name, e.g. `/game open mygame.nes` (aliases: `play`, `launch`, `load`; the extension is optional and matching is case/`-`/`_`-insensitive) |
 | `/game size <px>` | Set the game canvas width (48..448 px; height follows the 448:280 ratio) |
 | `/game stop` | Stop whichever game is running |
 
 Launching a game through `/game` also widens the chat canvas to its maximum so
-the picture is as large as chat allows. Imported games are discovered in
-`config/gamebox/games/` (the recommended drop-in folder, created on first use),
+the picture is as large as chat allows. Imported ROMs are discovered in
+`config/gamebox/games/` (the import folder, created on first use),
 `config/gamebox/`, the game directory, and its parent.
 
+**Importable systems.** GameBox recognises three systems by extension. Each is
+tagged with how far support goes — a ROM you import is either playable now or
+honestly reported as recognised-but-not-yet-playable:
+
+| System | Extensions | Status |
+|---|---|---|
+| NES / Famicom | `.nes`, `.fc`, `.famicom` | ✔ **Playable** — pure-Java NES core (also powers the built-in Super Mario Bros.) |
+| Game Boy / Color | `.gb`, `.gbc` | ✔ **Playable** — pure-Java Game Boy (DMG) core |
+| Super NES / Super Famicom | `.snes`, `.sfc` | ✔ **Playable** — native **snes9x** libretro core via a JNA bridge (build it first: see below) |
+
+Opening a system whose engine is present launches it; if the SNES native bridge
+hasn't been built yet, opening an `.sfc`/`.snes` reports that the native library
+isn't available (with the build command) instead of crashing. A file of any
+other type is simply reported as not a GameBox game.
+
 **In-chat only.** Every game GameBox runs renders **inside the Minecraft chat
-box** as Braille. It ships two engines: the pure-Java **NES** emulator (`.nes`,
-`.fc`) — which powers the built-in Super Mario Bros. — and the native **DOOM**
-engine (`.wad`, `.pwad`). Those are the extensions `/game` recognises for
-imported files; a file of any other type is simply reported as not a GameBox
-game. (GameBox deliberately does **not** shell out to external standalone
-emulators — a game playing in its own window outside Minecraft defeats the point.)
-Adding a new system later means writing an in-chat engine and pointing its
-extension at it in `GameLibrary`.
+box** as Braille. (GameBox deliberately does **not** shell out to external
+standalone emulators — a game playing in its own window outside Minecraft defeats
+the point.) The NES and Game Boy cores are pure Java and render straight into
+chat; the SNES core is the native **snes9x** libretro engine driven through a
+thin JNA bridge (the same architecture as DOOM) and renders into chat the same
+way. Adding another system later means writing (or embedding) its engine and
+flipping its status in `GameLibrary` — the NES core is the pure-Java reference
+implementation, and the SNES bridge is the native-core reference.
 
 **Non-game tools are separate commands.** The calculators are *not* games, so
 they live under their own top-level commands rather than under `/game`:
@@ -247,6 +321,39 @@ Only free/legally-obtained ROMs should be used.
 
 Press Minecraft's **Esc** while in the DOOM overlay to release input without
 stopping the game; re-grab it with the DOOM focus key (`K`).
+
+### Game Boy controls (imported `.gb` / `.gbc`)
+
+Imported Game Boy ROMs run on GameBox's **pure-Java Game Boy (DMG) core** and
+render into chat like the NES. Open one with `/game open <file.gb>`.
+
+| Keys | Game Boy button |
+|---|---|
+| Arrow keys / `W` `A` `S` `D` | D-pad |
+| `X` / `J` | A |
+| `Z` | B |
+| `Enter` | Start |
+| `Right Shift` / `Space` | Select |
+| `Esc` / `K` | Release / re-grab input |
+
+### Super NES controls (imported `.sfc` / `.snes`)
+
+Imported SNES ROMs run on the native **snes9x** libretro core via the JNA bridge
+(build it first — see *Building the native SNES bridge*). Open one with
+`/game open <file.sfc>`. Because the SNES pad has four face buttons plus
+shoulders, the face buttons use `X`/`Z`/`A`/`S` and the D-pad is the arrow keys.
+
+| Keys | SNES button |
+|---|---|
+| Arrow keys | D-pad (also `W`=up, `D`=right) |
+| `X` | A | 
+| `Z` | B |
+| `A` | X |
+| `S` | Y |
+| `Q` / `E` | L / R (shoulders) |
+| `Enter` | Start |
+| `Right Shift` / `Space` | Select |
+| `Esc` / `K` | Release / re-grab input |
 
 ### Graphing calculator (`/graph`)
 
@@ -335,10 +442,20 @@ src/main/java/com/example/gamebox/
     DoomEngine.java          35Hz engine thread, framebuffer -> Braille
     DoomInputScreen.java     transparent input-capture overlay
     DoomController.java      play/pause/resume/stop/status + WAD resolution
+  nes/                       pure-Java NES core (CPU/PPU/bus/cartridge) + Nes* glue
+  gb/                        pure-Java Game Boy (DMG) core (GbCpu/GbPpu/GbBus/…) + Gb* glue
+  snes/
+    SnesNative.java          JNA binding to the native snes9x bridge
+    SnesKeys.java            GLFW -> SNES (libretro joypad) mapping
+    SnesEngine.java          ~60Hz engine thread, framebuffer -> Braille
+    SnesInputScreen.java     transparent input-capture overlay
+    SnesController.java      run/stop/focus + bridge & core resolution
 native/
   doomgeneric_gamebox.c      doomgeneric platform layer + gamebox_doom_* ABI
-  Makefile, build.sh         native build (fetches doomgeneric)
+  Makefile, build.sh         native DOOM build (fetches doomgeneric)
   mouse-extension.patch      optional mouse-look engine patch
+  snes9x_gamebox.c           libretro frontend bridge + gamebox_snes_* ABI
+  Makefile.snes, build-snes.sh  native SNES build (fetches snes9x libretro)
 ```
 
 ---
@@ -349,3 +466,8 @@ native/
 - The DOOM native component links **doomgeneric** and **DOOM**, which are
   **GPL-2.0**. Any distributed build that includes the native library (or a
   jar bundling it) is a GPL-2.0 work. Use only free, redistributable WADs.
+- The SNES native component loads the **snes9x** libretro core, which is under
+  snes9x's own **non-commercial** license (the libretro glue is GPL-style). The
+  bridge (`native/snes9x_gamebox.c`) is only a loader; the SNES artifacts are not
+  bundled unless you run `build-snes.sh … install-mod`. Treat them with the same
+  posture as the DOOM component and run only ROMs you are legally entitled to use.

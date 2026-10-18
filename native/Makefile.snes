@@ -1,0 +1,54 @@
+# GameBox native SNES bridge Makefile
+#
+# Builds a shared library (libgameboxsnes.{so,dylib} / gameboxsnes.dll) from the
+# single-file libretro frontend (snes9x_gamebox.c). The bridge dynamically loads
+# a prebuilt snes9x libretro core at runtime, so this Makefile only needs a C
+# compiler and the dynamic-loader library — no snes9x sources are compiled here.
+#
+# Build the snes9x libretro core separately (see build-snes.sh) and point the mod
+# at it with GAMEBOX_SNES_CORE or by placing it next to the game.
+#
+# snes9x's license is non-commercial; treat the artifacts with the same posture
+# as the DOOM component (do not ship commercially; use only ROMs you own).
+
+BRIDGE := snes9x_gamebox.c
+OUTDIR ?= build
+
+UNAME_S := $(shell uname -s)
+CC      ?= cc
+CFLAGS  ?= -O2 -fPIC -fvisibility=hidden -DNDEBUG
+LIBS    :=
+
+ifeq ($(UNAME_S),Darwin)
+  LIBNAME := libgameboxsnes.dylib
+  LDFLAGS := -dynamiclib -install_name @rpath/$(LIBNAME)
+  OSDIR   := macos
+else ifeq ($(OS),Windows_NT)
+  LIBNAME := gameboxsnes.dll
+  LDFLAGS := -shared
+  OSDIR   := windows
+else
+  LIBNAME := libgameboxsnes.so
+  LDFLAGS := -shared
+  OSDIR   := linux
+  LIBS    := -ldl
+endif
+
+.PHONY: all clean install-mod
+
+all: $(OUTDIR)/$(LIBNAME)
+
+$(OUTDIR)/$(LIBNAME): $(BRIDGE)
+	@mkdir -p $(OUTDIR)
+	$(CC) $(CFLAGS) $(BRIDGE) $(LDFLAGS) $(LIBS) -o $@
+	@echo "Built $@"
+
+# Copies the built bridge into the mod's bundled natives resource folder so it
+# ships inside the jar (extracted at runtime by SnesEngine).
+install-mod: all
+	@mkdir -p ../src/main/resources/natives/$(OSDIR)
+	cp $(OUTDIR)/$(LIBNAME) ../src/main/resources/natives/$(OSDIR)/$(LIBNAME)
+	@echo "Installed $(LIBNAME) into src/main/resources/natives/$(OSDIR)/"
+
+clean:
+	rm -rf $(OUTDIR)

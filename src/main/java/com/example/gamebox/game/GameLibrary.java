@@ -14,85 +14,115 @@ import java.util.stream.Stream;
 
 /**
  * Discovers "importable" game files on disk and resolves a user-typed filename to
- * a concrete {@link Path}. GameBox treats each game console/engine as an
- * emulator keyed by file extension, so dropping a {@code .nes} ROM or a
- * {@code .wad} into a search directory makes it launchable by name via
- * {@code /game <filename>} — no code change required.
+ * a concrete {@link GameFile}. Each game console is keyed by file extension, so
+ * dropping a recognised ROM into the import folder makes it openable by name via
+ * {@code /game open <filename>} — no code change required.
+ *
+ * <h2>Recognised systems</h2>
+ * GameBox deliberately recognises only three systems — the ones that are either
+ * playable now or a realistic pure-Java in-chat emulator target:
+ * <ul>
+ *   <li><b>NES / Famicom</b> ({@code .nes}, {@code .fc}, {@code .famicom}) —
+ *       {@link Support#PLAYABLE} via the built-in pure-Java NES core;</li>
+ *   <li><b>Game Boy / Color</b> ({@code .gb}, {@code .gbc}) —
+ *       {@link Support#PLAYABLE} via the pure-Java Game Boy (DMG) core;</li>
+ *   <li><b>Super NES / Super Famicom</b> ({@code .snes}, {@code .sfc}) —
+ *   <li><b>Super NES / Super Famicom</b> ({@code .snes}, {@code .sfc}) —
+ *       {@link Support#PLAYABLE} via the native snes9x libretro core (requires
+ *       the native bridge built with {@code native/build-snes.sh}).</li>
+ * </ul>
+ * Any other file type is simply reported as "not a GameBox game". Teaching
+ * GameBox to actually play a {@link Support#PLANNED} system is a matter of
+ * writing its in-chat engine and flipping its {@link Support} to
+ * {@link Support#PLAYABLE}.
  *
  * <h2>Search locations</h2>
  * <ol>
- *   <li>{@code <config>/gamebox/games/} — the recommended "drop games here" dir
- *       (created on first use);</li>
+ *   <li>{@code <config>/gamebox/games/} — the import folder (created on first use);</li>
  *   <li>{@code <config>/gamebox/};</li>
  *   <li>the Minecraft game directory ({@code run/} in dev);</li>
- *   <li>its parent (the project root in dev, where the built-in Super Mario ROM
- *       ships).</li>
+ *   <li>its parent (the project root in dev, where the built-in Super Mario ROM ships).</li>
  * </ol>
- *
- * <h2>Recognised extensions → engine</h2>
- * <ul>
- *   <li>{@code .nes} → the pure-Java NES emulator;</li>
- *   <li>{@code .wad} / {@code .iwad} / {@code .pwad} → the DOOM (doomgeneric)
- *       engine.</li>
- * </ul>
- * The map is easy to extend as more engines are added.
  */
 public final class GameLibrary {
 
-    /** The actual runnable backends GameBox ships — all render in-chat as Braille. */
+    /** The runnable backends GameBox ships — all render in-chat as Braille. */
     public enum Engine {
-        NES, DOOM
+        /** Pure-Java NES/Famicom core (powers the built-in Super Mario Bros.). */
+        NES,
+        /** Pure-Java Game Boy (DMG) core. */
+        GB,
+        /** Native snes9x libretro core (SNES / Super Famicom). */
+        SNES,
+        /** Native DOOM (doomgeneric) engine — not an importable console here. */
+        DOOM
+    }
+
+    /** How well GameBox can actually run a given system. */
+    public enum Support {
+        /** A working in-chat engine exists; the file can be launched now. */
+        PLAYABLE,
+        /** Recognised system, but its in-chat engine is not written yet. */
+        PLANNED
     }
 
     /**
-     * A console / platform a game file can belong to. Each system maps to the
-     * {@link Engine} that runs it <em>in the Minecraft chat box</em>. GameBox only
-     * recognises systems it can actually play in chat; adding a new in-chat engine
-     * later is just a matter of adding a {@link System} + {@link Engine} and
-     * pointing its extensions at it in {@link #EXT_SYSTEM}.
+     * A console GameBox recognises for import. Each maps to the {@link Engine}
+     * that would run it in chat (may be {@code null} while {@link Support#PLANNED})
+     * and a {@link Support} status.
      */
     public enum System {
-        NES("Nintendo (NES/Famicom)", Engine.NES),
-        DOOM("DOOM (id Tech 1)", Engine.DOOM);
+        NES("Nintendo (NES / Famicom)", Engine.NES, Support.PLAYABLE),
+        GB("Game Boy / Game Boy Color", Engine.GB, Support.PLAYABLE),
+        SNES("Super NES / Super Famicom", Engine.SNES, Support.PLAYABLE);
 
         private final String displayName;
         private final Engine engine;
+        private final Support support;
 
-        System(String displayName, Engine engine) {
+        System(String displayName, Engine engine, Support support) {
             this.displayName = displayName;
             this.engine = engine;
+            this.support = support;
         }
 
         public String displayName() {
             return displayName;
         }
 
-        /** The engine that runs this system in chat. */
+        /** The engine that runs this system in chat, or {@code null} if none yet. */
         public Engine engine() {
             return engine;
         }
 
-        public boolean supported() {
-            return engine != null;
+        public Support support() {
+            return support;
+        }
+
+        public boolean playable() {
+            return support == Support.PLAYABLE && engine != null;
         }
     }
 
-    /** A discovered game file, tagged with its {@link System} (and thus engine). */
+    /** A discovered game file, tagged with its {@link System}. */
     public record GameFile(String name, Path path, System system, long sizeBytes) {
-        /** The engine that runs this file in chat. */
+        /** The engine that runs this file in chat, or {@code null} if none yet. */
         public Engine engine() {
             return system.engine();
         }
 
-        public boolean supported() {
-            return system.supported();
+        public Support support() {
+            return system.support();
+        }
+
+        public boolean playable() {
+            return system.playable();
         }
     }
 
     /**
-     * Lower-case extension (no dot) → {@link System}. Only the extensions GameBox
-     * can actually run in chat are recognised. Add a new in-chat engine here to
-     * teach GameBox a new system.
+     * Lower-case extension (no dot) → {@link System}. Only these extensions are
+     * recognised; everything else is "not a GameBox game".
      */
     private static final Map<String, System> EXT_SYSTEM = new LinkedHashMap<>();
 
@@ -103,23 +133,31 @@ public final class GameLibrary {
     }
 
     static {
-        // DOOM engine (native doomgeneric, rendered into chat as Braille).
-        map(System.DOOM, "wad", "iwad", "pwad");
-        // NES family (pure-Java emulator, rendered into chat as Braille).
-        map(System.NES, "nes", "fc", "famicom", "unf", "unif");
+        // NES / Famicom — pure-Java core, playable now.
+        map(System.NES, "nes", "fc", "famicom");
+        // Game Boy / Color — recognised, engine planned.
+        map(System.GB, "gb", "gbc");
+        // Super NES / Super Famicom — recognised, engine planned.
+        map(System.SNES, "snes", "sfc");
     }
 
     private GameLibrary() {
     }
 
-    /** The set of recognised extensions (without the leading dot). */
+    /** The set of recognised extensions (without the leading dot), in registry order. */
     public static List<String> extensions() {
         return new ArrayList<>(EXT_SYSTEM.keySet());
     }
 
-    /** A few representative, actually-playable extensions, for hints. */
+    /** The actually-playable extensions, for hints. */
     public static List<String> playableExtensionHints() {
-        return List.of("nes", "wad");
+        List<String> out = new ArrayList<>();
+        for (Map.Entry<String, System> e : EXT_SYSTEM.entrySet()) {
+            if (e.getValue().playable()) {
+                out.add(e.getKey());
+            }
+        }
+        return out;
     }
 
     /** The {@link System} for a file name, or {@code null} if the extension is unknown. */
@@ -128,7 +166,7 @@ public final class GameLibrary {
         return ext == null ? null : EXT_SYSTEM.get(ext);
     }
 
-    /** The engine for a file name, or {@code null} if the extension is unknown. */
+    /** The engine for a file name, or {@code null} if unknown / not yet playable. */
     public static Engine engineForName(String fileName) {
         System sys = systemForName(fileName);
         return sys == null ? null : sys.engine();
@@ -143,7 +181,7 @@ public final class GameLibrary {
         return fileName.substring(dot + 1).toLowerCase(Locale.ROOT);
     }
 
-    /** The recommended drop-in directory, created on demand. */
+    /** The import folder, created on demand. */
     public static Path gamesDir() {
         Path dir = FabricLoader.getInstance().getConfigDir().resolve("gamebox").resolve("games");
         try {
@@ -209,8 +247,8 @@ public final class GameLibrary {
      * Resolves a user-typed game name to a discovered file. Matching is
      * case-insensitive and tolerant of a missing extension (e.g. {@code mario}
      * matches {@code mario.nes}) and of spaces vs. hyphens/underscores. If the
-     * query is itself a readable absolute/relative path, that path is used
-     * directly.
+     * query is itself a readable absolute/relative path with a recognised
+     * extension, that path is used directly.
      *
      * @return the matching {@link GameFile}, or {@code null} if none matched
      */
